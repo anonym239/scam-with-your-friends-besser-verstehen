@@ -24,6 +24,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Tasks]
+Name: "autostart"; Description: "Sprechhilfe beim Anmelden automatisch im Hintergrund starten"; GroupDescription: "Zusätzlich:"
 Name: "desktopicon"; Description: "Symbol auf dem Desktop"; GroupDescription: "Zusätzlich:"
 
 [Files]
@@ -34,6 +35,7 @@ Name: "{group}\Sprechhilfe"; Filename: "{app}\Sprechhilfe.exe"
 Name: "{group}\Sprechhilfe – Einstellungen"; Filename: "{app}\Sprechhilfe.exe"; Parameters: "--einstellungen"
 Name: "{group}\Sprechhilfe deinstallieren"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\Sprechhilfe"; Filename: "{app}\Sprechhilfe.exe"; Tasks: desktopicon
+Name: "{userstartup}\Sprechhilfe"; Filename: "{app}\Sprechhilfe.exe"; Tasks: autostart
 
 [Run]
 Filename: "{app}\Sprechhilfe.exe"; Description: "Sprechhilfe jetzt starten"; Flags: nowait postinstall skipifsilent

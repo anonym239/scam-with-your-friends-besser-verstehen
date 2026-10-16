@@ -25,12 +25,16 @@ jobs:
         run: python -m unittest discover -s tests -t . -v
       - name: Sprechhilfe.exe bauen
         run: python -m PyInstaller --noconfirm sprechhilfe.spec
-      - name: Selbsttest der EXE (lädt das kleinste Modell und erkennt Stille)
+      - name: Selbsttest beider EXE (lädt das kleinste Modell und erkennt Stille)
         shell: pwsh
         run: |
-          $test = Start-Process dist\Sprechhilfe\Sprechhilfe.exe -ArgumentList "--selbsttest" -Wait -PassThru -NoNewWindow
-          Get-Content "$env:APPDATA\Sprechhilfe\selbsttest.txt"
-          if ($test.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen" }
+          foreach ($exe in @("dist\Sprechhilfe\Sprechhilfe.exe", "dist\Sprechhilfe-EinKlick.exe")) {
+            Remove-Item "$env:APPDATA\Sprechhilfe\selbsttest.txt" -ErrorAction SilentlyContinue
+            $test = Start-Process $exe -ArgumentList "--selbsttest" -Wait -PassThru
+            Write-Host "$exe :"
+            Get-Content "$env:APPDATA\Sprechhilfe\selbsttest.txt"
+            if ($test.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen: $exe" }
+          }
       - name: Installer bauen (Sprechhilfe-Setup.exe)
         shell: pwsh
         env:
@@ -42,10 +46,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup fehlgeschlagen" }
           Compress-Archive -Path dist\Sprechhilfe -DestinationPath Sprechhilfe-Windows-portable.zip
           Copy-Item Output\Sprechhilfe-Setup.exe Sprechhilfe-Setup.exe
+          Copy-Item dist\Sprechhilfe-EinKlick.exe Sprechhilfe.exe
       - uses: actions/upload-artifact@v4
         with:
           name: Sprechhilfe-Windows
           path: |
+            Sprechhilfe.exe
             Sprechhilfe-Setup.exe
             Sprechhilfe-Windows-portable.zip
 
@@ -66,9 +72,16 @@ jobs:
           target_commitish: ${{ github.sha }}
           make_latest: true
           body: |
-            `Sprechhilfe-Setup.exe` herunterladen und installieren (oder `Sprechhilfe-Windows-portable.zip` entpacken und `Sprechhilfe.exe` starten).
-            Beim ersten Start wird das Spracherkennungs-Modell einmalig heruntergeladen. Danach läuft alles offline.
-            Anleitung: siehe README im Repository.
+            **Mit einem Klick:** `Sprechhilfe.exe` herunterladen und doppelklicken. Fertig. Sie läuft unsichtbar im Hintergrund, nur ein Mikrofon-Symbol unten rechts in der Taskleiste (eventuell hinter dem Pfeil ^).
+
+            Im Spiel: **F8** oder die vordere Seitentaste der Maus gedrückt halten, Deutsch sprechen, loslassen. Der Text wird ins Spiel getippt und abgeschickt.
+
+            Beim allerersten Start wird die Spracherkennung einmalig heruntergeladen (ca. 460 MB). Danach läuft alles offline auf deinem PC.
+            Wichtig: Im Spiel die eigene Sprachaufnahme ausschalten bzw. auf Tippen stellen, sonst kommt alles doppelt an.
+
+            Alternativ: `Sprechhilfe-Setup.exe` (mit Startmenü und Autostart) oder `Sprechhilfe-Windows-portable.zip`.
+            Windows SmartScreen fragt evtl. beim ersten Start: „Weitere Informationen“ → „Trotzdem ausführen“.
           files: |
+            out/Sprechhilfe.exe
             out/Sprechhilfe-Setup.exe
             out/Sprechhilfe-Windows-portable.zip

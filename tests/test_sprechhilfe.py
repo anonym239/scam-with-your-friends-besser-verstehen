@@ -95,3 +95,35 @@ class SegmenterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppTest(unittest.TestCase):
+    def test_worker_delivers_and_reports(self):
+        import threading
+        from unittest import mock
+        from sprechhilfe import app as app_module
+        settings = config.parse(config.DEFAULT_INI + "pay pal = PayPal\n")
+        states = []
+        a = app_module.App(settings, on_state=lambda **kw: states.append(kw))
+        a.recognizer.transcribe = lambda samples: "Bitte zahlen Sie mit pay pal."
+        typed = []
+        with mock.patch.object(app_module.keys, "type_text", lambda t, d: typed.append(t)), \
+                mock.patch.object(app_module, "_history", lambda line: None):
+            threading.Thread(target=a._worker, daemon=True).start()
+            a.jobs.put(np.zeros(16000, dtype=np.int16))
+            for _ in range(100):
+                if typed and any(s.get("state") == "bereit" for s in states):
+                    break
+                import time
+                time.sleep(0.02)
+        self.assertEqual(typed, ["Bitte zahlen Sie mit PayPal."])
+        self.assertIn({"last": "Bitte zahlen Sie mit PayPal."}, states)
+
+    def test_pause_blocks_typing(self):
+        from unittest import mock
+        from sprechhilfe import app as app_module
+        a = app_module.App(config.parse(config.DEFAULT_INI))
+        a.toggle_pause()
+        with mock.patch.object(app_module.keys, "type_text") as typer:
+            a._deliver("Hallo")
+        typer.assert_not_called()

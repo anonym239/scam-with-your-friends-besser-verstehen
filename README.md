@@ -8,14 +8,29 @@ Du sprichst **Deutsch**, und die Sprechhilfe tippt **genau das, was du gesagt ha
 
 > Ehrlich gesagt: Ganz ohne „KI“ geht Spracherkennung nicht. Jede Spracherkennung, auch die in Windows oder im Handy, ist ein gelerntes Modell. Hier ist es **Whisper**, das offline auf deinem PC läuft, wie ein normales Programm. Es schickt nichts ins Internet und fragt keinen Server.
 
-## Download
+## Download – mit einem Klick
 
-Unter **[Releases](../../releases/latest)** liegen nach jedem Build:
+Unter **[Releases](../../releases/latest)** gibt es:
 
 | Datei | Wofür |
 | --- | --- |
-| `Sprechhilfe-Setup.exe` | Installer (ohne Admin-Rechte, legt Startmenü-Einträge an) |
-| `Sprechhilfe-Windows-portable.zip` | Ohne Installation: entpacken, `Sprechhilfe.exe` starten |
+| **`Sprechhilfe.exe`** | **Herunterladen, doppelklicken, fertig.** Keine Installation. |
+| `Sprechhilfe-Setup.exe` | Installer mit Startmenü und „beim Anmelden automatisch starten“ (ohne Admin-Rechte) |
+| `Sprechhilfe-Windows-portable.zip` | Ordner-Version zum Entpacken (startet etwas schneller als die Ein-Datei-Version) |
+
+Fragt Windows SmartScreen beim ersten Start nach: **„Weitere Informationen“ → „Trotzdem ausführen“**. Das Programm ist nicht bei Microsoft signiert, deshalb fragt Windows.
+
+Es öffnet sich **kein Fenster**. Die Sprechhilfe läuft unsichtbar im Hintergrund, nur ein **Mikrofon-Symbol unten rechts in der Taskleiste** (eventuell hinter dem Pfeil `^`):
+
+| Farbe | Bedeutung |
+| --- | --- |
+| grau | lädt (beim ersten Start: Modell wird heruntergeladen) |
+| grün | bereit, wartet auf deine Taste |
+| rot | nimmt auf |
+| blau | erkennt und tippt |
+| gelb | Pause |
+
+**Rechtsklick aufs Symbol:** Pause, Einstellungen öffnen, Neu starten (nach dem Ändern der Einstellungen), Protokoll („Was wurde verstanden?“), Mikrofone anzeigen, Beenden.
 
 ## Überschneidet sich das mit dem Mikrofon vom Spiel? (Wichtig!)
 
@@ -31,13 +46,13 @@ Das Spiel darf also **nicht selbst mithören**. Dann gibt es nur einen Weg ins S
 
 ## So benutzt du sie
 
-1. Sprechhilfe starten. Es öffnet sich ein kleines Fenster. Das kannst du einfach **minimieren**, die Sprechhilfe läuft im Hintergrund weiter.
-2. Beim ersten Start einmal warten, bis das Modell heruntergeladen ist („Spracherkennung bereit“).
+1. `Sprechhilfe.exe` doppelklicken. Unten rechts erscheint das Mikrofon-Symbol.
+2. Beim ersten Start einmal warten, bis das Modell heruntergeladen ist und das Symbol **grün** wird. Windows zeigt dann „Bereit!“.
 3. Im Spiel: **`F8` oder `Maus4` gedrückt halten → Deutsch sprechen → loslassen.**
 4. Kurzer Ton, dann tippt die Sprechhilfe den Satz ins Spiel und drückt **Enter** zum Abschicken.
 5. **`F9`** = Pause an/aus.
 
-Im Fenster siehst du immer, was verstanden und getippt wurde. Alles wird außerdem in `%APPDATA%\Sprechhilfe\verlauf.txt` gespeichert.
+Was verstanden und getippt wurde, steht im Protokoll (Rechtsklick aufs Symbol) und in `%APPDATA%\Sprechhilfe\verlauf.txt`.
 
 ### Wenn im Spiel nichts ankommt
 
@@ -48,14 +63,14 @@ Im Fenster siehst du immer, was verstanden und getippt wurde. Alles wird außerd
 
 ## Einstellungen
 
-Startmenü → **„Sprechhilfe – Einstellungen“** (oder `Sprechhilfe.exe --einstellungen`) öffnet die Datei `%APPDATA%\Sprechhilfe\einstellungen.ini` im Editor. Jede Zeile ist dort auf Deutsch erklärt. Nach dem Speichern die Sprechhilfe neu starten.
+Rechtsklick aufs Symbol → **„Einstellungen öffnen“** öffnet `%APPDATA%\Sprechhilfe\einstellungen.ini` im Editor. Jede Zeile ist dort auf Deutsch erklärt. Nach dem Speichern: Rechtsklick → **„Neu starten“**.
 
 | Einstellung | Standard | Bedeutung |
 | --- | --- | --- |
 | `modus` | `halten` | `halten` (Taste halten), `umschalten` (an/aus drücken), `immer` (hört ständig zu und schickt nach jeder Pause; nur mit Kopfhörer und wenn du nebenbei nicht mit Freunden redest) |
 | `sprechtaste` | `F8, maus4` | Mehrere mit Komma, Kombis mit `+` (z. B. `strg+leertaste`, `maus5`, `mausmitte`) |
 | `pausetaste` | `F9` | Pause an/aus |
-| `mikrofon` | leer | Teil des Gerätenamens. Liste: `Sprechhilfe.exe --mikrofone` |
+| `mikrofon` | leer | Teil des Gerätenamens. Liste: Rechtsklick → „Mikrofone anzeigen“ |
 | `chattaste` | leer | Taste vor dem Tippen (öffnet das Textfeld) |
 | `absendetaste` | `enter` | Taste nach dem Tippen |
 | `modell` | `auto` | `small` (schnell), `medium` (versteht besser), `large-v3-turbo` (am genauesten) |
