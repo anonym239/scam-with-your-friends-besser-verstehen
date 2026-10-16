@@ -55,6 +55,15 @@ Das Spiel darf also **nicht selbst mithören**. Dann gibt es nur einen Weg ins S
 
 Ein **tiefer Ton** heißt: nichts verstanden, bitte nochmal sagen. Ist ein Satz trotzdem nicht im Spiel angekommen: Rechtsklick aufs Symbol → **„Letzten Satz nochmal tippen“**.
 
+### Eigene Tasten festlegen
+
+Rechtsklick aufs Symbol → **„Tasten festlegen“** → z. B. **„Sprechtaste: F8, maus4 (ändern …)“** anklicken → **die gewünschte Taste drücken**. Fertig: Sie gilt sofort und wird gespeichert.
+
+- Geht mit jeder Taste, auch mit **Maustaste 4/5/Mitte**, Sondertasten von Gaming-Tastaturen und Kombinationen wie **Strg+F8** (Strg halten, dann F8 drücken).
+- **Esc** bricht ab.
+- So lassen sich **Sprechtaste**, **Pausetaste** und **Textfeld-merken-Taste** ändern.
+- Nimm am besten eine Taste, die im Spiel nichts tut (F-Taste oder Maus-Seitentaste). Eine Buchstabentaste würde im Spiel selbst einen Buchstaben tippen.
+
 ### Andere Sprachen
 
 Standard ist `sprache = auto`. Die Sprechhilfe erkennt selbst, welche Sprache du sprichst (Deutsch, Englisch, Türkisch, Russisch, Polnisch, Arabisch, … rund 100 Sprachen), und tippt den Satz **genau so, wie du ihn gesagt hast**. Es wird **nicht übersetzt**. Ist sie sich unsicher, nimmt sie Deutsch (`hauptsprache`).

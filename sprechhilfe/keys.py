@@ -18,7 +18,7 @@ _NAMES = {
     "runter": 0x28, "einfg": 0x2D, "entf": 0x2E, "win": 0x5B,
     "num*": 0x6A, "num+": 0x6B, "num-": 0x6D, "num,": 0x6E, "num/": 0x6F,
     "rollen": 0x91, "lshift": 0xA0, "rshift": 0xA1, "lstrg": 0xA2, "rstrg": 0xA3, "lalt": 0xA4, "altgr": 0xA5,
-    "ü": 0xBA, "+": 0xBB, ",": 0xBC, "-": 0xBD, ".": 0xBE, "#": 0xBF, "ö": 0xC0, "ß": 0xDB, "^": 0xDC,
+    "ü": 0xBA, "+": 0xBB, "komma": 0xBC, ",": 0xBC, "-": 0xBD, ".": 0xBE, "#": 0xBF, "ö": 0xC0, "ß": 0xDB, "^": 0xDC,
     "´": 0xDD, "ä": 0xDE, "<": 0xE2,
 }
 _NAMES.update({f"f{i}": 0x6F + i for i in range(1, 25)})
@@ -52,10 +52,72 @@ def parse_combo(text):
         raise KeyError_("leer")
     codes = []
     for name in merged:
-        if name not in _NAMES:
+        if name in _NAMES:
+            codes.append(_NAMES[name])
+        elif name.startswith("vk") and name[2:].isdigit() and 0 < int(name[2:]) < 255:
+            codes.append(int(name[2:]))     # jede andere Taste, z. B. Sondertasten von Gaming-Tastaturen
+        else:
             raise KeyError_(name)
-        codes.append(_NAMES[name])
     return tuple(codes)
+
+
+# Für die Anzeige und zum Speichern: ein Name pro Tastencode (der erste aus _NAMES, mit schöner Schreibweise).
+_PRETTY = {"strg": "Strg", "alt": "Alt", "shift": "Shift", "leertaste": "Leertaste", "enter": "Enter", "esc": "Esc",
+           "tab": "Tab", "maus4": "Maus4", "maus5": "Maus5", "mausmitte": "Mausmitte", "altgr": "AltGr"}
+_VK_NAME = {}
+for _name, _code in _NAMES.items():
+    _VK_NAME.setdefault(_code, _name)
+_VK_NAME.update({0x10: "shift", 0x11: "strg", 0x12: "alt", 0x0D: "enter", 0x20: "leertaste", 0x08: "rueck",
+                0xBC: "komma"})
+
+
+def key_name(code):
+    name = _VK_NAME.get(code, f"vk{code}")
+    if name in _PRETTY:
+        return _PRETTY[name]
+    if name.startswith("f") and name[1:].isdigit():
+        return name.upper()
+    return name
+
+
+def combo_name(combo):
+    return "+".join(key_name(code) for code in combo)
+
+
+_MODIFIERS = (0x11, 0x12, 0x10, 0x5B)     # Strg, Alt, Shift, Win (in dieser Reihenfolge im Namen)
+# Beim Abfragen überspringen: linke/rechte Maustaste (damit klickt man das Menü) und die Links/Rechts-Varianten
+# von Shift/Strg/Alt (die allgemeinen Codes reichen und halten den Namen kurz).
+_SKIP = {0x01, 0x02, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5C, 0xFF}
+
+
+def capture_combo(is_down_fn=None, timeout=15.0, poll=0.01, cancel=0x1B):
+    """Wartet, bis eine Taste (oder Maustaste 4/5/Mitte) gedrückt wird, und gibt die Kombination zurück.
+
+    Gehaltene Strg/Alt/Shift/Win gehören dazu (z. B. Strg+F8). Nur eine Umschalttaste drücken und loslassen ergibt
+    diese allein. Esc oder Zeitablauf -> None. Vorher wird gewartet, bis alle Tasten losgelassen sind.
+    """
+    down = is_down_fn or is_down
+    codes = [c for c in range(1, 255) if c not in _SKIP]
+    deadline = time.monotonic() + timeout
+    while any(down(c) for c in codes):            # z. B. die Taste, mit der das Menü bedient wurde
+        if time.monotonic() > deadline:
+            return None
+        time.sleep(poll)
+    lone_modifier = None
+    while time.monotonic() < deadline:
+        pressed = [c for c in codes if down(c)]
+        if cancel in pressed:
+            return None
+        main = [c for c in pressed if c not in _MODIFIERS]
+        mods = [m for m in _MODIFIERS if m in pressed]
+        if main:
+            return tuple(mods) + (main[0],)
+        if mods:
+            lone_modifier = tuple(mods)
+        elif lone_modifier:
+            return lone_modifier                   # Umschalttaste allein gedrückt und losgelassen
+        time.sleep(poll)
+    return None
 
 
 def parse_hotkeys(text):

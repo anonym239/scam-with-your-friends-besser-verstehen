@@ -219,6 +219,20 @@ def load():
     return parse(text)
 
 
+def set_value(key, value):
+    """Ändert eine Einstellung in der Datei und lässt alle Erklärungen und anderen Werte, wie sie sind."""
+    import re
+    load()
+    path = ini_path()
+    with open(path, encoding="utf-8-sig") as f:
+        text = f.read()
+    text, count = re.subn(rf"(?m)^{re.escape(key)}[ \t]*=.*$", lambda _m: f"{key} = {value}", text, count=1)
+    if not count:
+        text = re.sub(r"(?m)^\[Sprechhilfe\][ \t]*$", lambda _m: f"[Sprechhilfe]\n{key} = {value}", text, count=1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
 def state_path():
     return os.path.join(data_dir(), "zustand.json")
 

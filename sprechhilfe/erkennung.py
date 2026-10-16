@@ -57,6 +57,31 @@ def loudness_normalize(samples):
     return samples.astype(np.float32)
 
 
+_MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
+
+
+def model_folder(name, cache, log=print):
+    """Ordner mit dem Modell. Lädt es beim ersten Mal herunter, als normale Dateien (ohne Windows-Verknüpfungen,
+    die ohne Entwicklermodus mit „WinError 1314“ scheitern). Ist es schon da, wird das Internet nicht gebraucht."""
+    folder = os.path.join(cache, name)
+    if all(os.path.isfile(os.path.join(folder, f)) for f in _MODEL_FILES):
+        return folder
+    from faster_whisper.utils import download_model
+    log(f"Lade das Modell „{name}“ herunter (nur beim ersten Mal, bitte warten) …")
+    download_model(name, output_dir=folder)
+    if not all(os.path.isfile(os.path.join(folder, f)) for f in _MODEL_FILES):
+        raise OSError("Download unvollständig")
+    return folder
+
+
+def remove_old_cache(cache):
+    """Räumt den alten Zwischenspeicher früherer Versionen weg (models--…), der viel Platz belegen kann."""
+    import shutil
+    for entry in os.listdir(cache):
+        if entry.startswith("models--") or entry == ".locks":
+            shutil.rmtree(os.path.join(cache, entry), ignore_errors=True)
+
+
 def auto_model(device):
     if device == "cuda":
         return "large-v3-turbo"
@@ -97,14 +122,19 @@ class Recognizer:
         for device, compute, name in self._attempts():
             where = "Grafikkarte" if device == "cuda" else "Prozessor"
             try:
-                log(f"Lade Spracherkennung „{name}“ auf {where} … (beim ersten Mal wird das Modell einmalig "
-                    "heruntergeladen, bitte warten)")
-                model = WhisperModel(name, device=device, compute_type=compute, download_root=cache,
+                path = model_folder(name, cache, log)
+            except Exception as error:
+                raise RuntimeError(f"Das Modell „{name}“ konnte nicht heruntergeladen werden: {error}. "
+                                   "Bitte Internetverbindung und freien Speicherplatz prüfen.") from error
+            try:
+                log(f"Starte Spracherkennung „{name}“ auf {where} …")
+                model = WhisperModel(path, device=device, compute_type=compute,
                                      cpu_threads=max(2, (os.cpu_count() or 4) - 2))
                 # Probelauf: fehlen CUDA-Bibliotheken, merkt man das erst hier.
                 list(model.transcribe(np.zeros(RATE_SECOND, dtype=np.float32), language=self.main)[0])
                 self.model = model
                 self.description = f"{name} auf {where}"
+                remove_old_cache(cache)
                 return
             except Exception as error:
                 last = error

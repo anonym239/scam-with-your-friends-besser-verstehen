@@ -83,6 +83,7 @@ class App:
             if keys.is_mouse(combo):
                 raise keys.KeyError_("Maustasten gehen nicht als Chat- oder Absendetaste")
         self.paused = False
+        self.capturing = False
         self.ready = False
         self.recording = False
         self.last_text = ""
@@ -137,6 +138,60 @@ class App:
         self.field = None
         config.save_state(textfeld=None)
         log("Textfeld vergessen.")
+
+    KEY_SETTINGS = {
+        "sprechtaste": ("Sprechtaste", "talk_keys"),
+        "pausetaste": ("Pausetaste", "pause_keys"),
+        "feld_merken_taste": ("Textfeld-merken-Taste", "field_keys"),
+    }
+
+    def key_label(self, setting):
+        title, _ = self.KEY_SETTINGS[setting]
+        return f"{title}: {getattr(self.s, setting) or '–'}  (ändern …)"
+
+    def change_key(self, setting):
+        """Fragt die neue Taste ab: einfach drücken. Wird sofort benutzt und in den Einstellungen gespeichert."""
+        if self.capturing:
+            return
+        threading.Thread(target=self._capture_key, args=(setting,), daemon=True).start()
+
+    def _capture_key(self, setting):
+        title, attribute = self.KEY_SETTINGS[setting]
+        if self.recording:
+            self.recorder.end()
+            self.recording = False
+        self.capturing = True
+        self.on_state(status=f"Drück die neue {title} … (Esc = abbrechen)")
+        self.on_notify(f"Drück jetzt die neue {title}. Geht auch: Maustaste 4/5/Mitte oder z. B. Strg+F8. "
+                       "Esc = abbrechen.")
+        _beep(1000, 80, self.s.toene)
+        try:
+            combo = keys.capture_combo()
+        finally:
+            self.capturing = False
+        if self.ready:
+            self._idle_state()
+        if not combo:
+            self.on_notify(f"{title} nicht geändert.")
+            return
+        name = keys.combo_name(combo)
+        for other, (other_title, other_attribute) in self.KEY_SETTINGS.items():
+            if other != setting and combo in getattr(self, other_attribute):
+                self.on_notify(f"{name} ist schon die {other_title}. Bitte eine andere Taste nehmen.")
+                _beep(300, 200, self.s.toene)
+                return
+        setattr(self, attribute, [combo])
+        setattr(self.s, setting, name)
+        config.set_value(setting, name)
+        log(f"{title} ist jetzt: {name}")
+        _beep(1500, 60, self.s.toene)
+        _beep(1800, 60, self.s.toene)
+        warning = ""
+        if setting == "sprechtaste" and len(combo) == 1 and (0x30 <= combo[0] <= 0x5A or combo[0] in (0x20, 0x0D)):
+            warning = " Achtung: Diese Taste tippt im Spiel auch selbst einen Buchstaben. Besser F-Taste oder Maustaste."
+        self.on_notify(f"{title} ist jetzt: {name}.{warning}")
+        if self.ready:
+            self._idle_state()
 
     def retype_last(self):
         if self.last_text:
@@ -222,6 +277,10 @@ class App:
         pressed_at = 0.0
         while True:
             time.sleep(0.01)
+            if self.capturing:
+                # Die neue Taste soll nicht gleich eine Aufnahme starten: erst nach dem Loslassen zählen.
+                talk_was = pause_was = field_was = True
+                continue
             pause_now = keys.any_down(self.pause_keys)
             if pause_now and not pause_was:
                 self.toggle_pause()
@@ -434,7 +493,9 @@ def main():
             on_log=lambda: _open_in_editor(log_path()), on_mics=_show_mics, on_restart=restart, on_quit=quit_app,
             is_paused=lambda: app.paused, on_retype=app.retype_last, on_forget_field=app.forget_field,
             has_field=lambda: bool(app.field), on_setup_gpu=setup_gpu_from_menu,
-            gpu_offer=lambda: holder.get("gpu_offer", False))
+            gpu_offer=lambda: holder.get("gpu_offer", False),
+            key_items=[((lambda k: lambda: app.key_label(k))(k), (lambda k: lambda: app.change_key(k))(k))
+                       for k in App.KEY_SETTINGS])
     except keys.KeyError_ as error:
         _message_box(f"Unbekannte Taste in den Einstellungen: {error}\n\nBitte in\n{config.ini_path()}\nkorrigieren.")
         return
@@ -461,7 +522,10 @@ def main():
     def announce_when_ready():
         while not app.ready:
             time.sleep(0.5)
-        hint = "" if app.field else f" Tipp: Maus aufs Textfeld im Spiel und {settings.feld_merken_taste} drücken."
+        hint = "" if app.field else f" Tipp: Maus aufs Textfeld im Spiel und {app.s.feld_merken_taste} drücken."
+        if not config.load_state().get("tasten_hinweis"):
+            config.save_state(tasten_hinweis=True)
+            hint += " Eigene Tasten: Rechtsklick aufs Symbol → Tasten festlegen."
         tray_ui.notify(f"Bereit ({app.recognizer.description}). {app.how_to()}{hint}")
 
     def setup():

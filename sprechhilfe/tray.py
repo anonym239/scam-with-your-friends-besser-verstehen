@@ -31,7 +31,7 @@ def draw_icon(state):
 class Tray:
     def __init__(self, on_pause, on_settings, on_log, on_mics, on_restart, on_quit, is_paused,
                  on_retype=lambda: None, on_forget_field=lambda: None, has_field=lambda: False,
-                 on_setup_gpu=lambda: None, gpu_offer=lambda: False):
+                 on_setup_gpu=lambda: None, gpu_offer=lambda: False, key_items=()):
         import pystray
         self._pystray = pystray
         self.state = "laden"
@@ -44,6 +44,9 @@ class Tray:
             item("Letzten Satz nochmal tippen", lambda: on_retype(), enabled=lambda _: bool(self.last)),
             pystray.Menu.SEPARATOR,
             item("Pause", lambda: on_pause(), checked=lambda _: is_paused()),
+            item("Tasten festlegen", pystray.Menu(*[
+                item((lambda fn: lambda _: fn())(label), (lambda fn: lambda: fn())(action))
+                for label, action in key_items])),
             item("Gemerktes Textfeld vergessen", lambda: on_forget_field(), visible=lambda _: has_field()),
             item("Grafikkarte einrichten (genauer und schneller)", lambda: on_setup_gpu(),
                  visible=lambda _: gpu_offer()),

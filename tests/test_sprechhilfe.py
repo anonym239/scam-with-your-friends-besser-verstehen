@@ -236,3 +236,102 @@ class GpuTest(unittest.TestCase):
                  "nvidia_cublas_cu12-12.9.1.4.dist-info/RECORD"]
         self.assertEqual(gpu.dll_members(names), ["nvidia/cublas/bin/cublas64_12.dll",
                                                   "nvidia/cudnn/bin/cudnn_ops64_9.dll"])
+
+
+class FakeKeyboard:
+    """Spielt eine Folge von gedrückten Tasten ab: jeder Aufruf-Durchgang ist ein Zeitschritt."""
+    def __init__(self, steps):
+        self.steps, self.i = steps, 0
+
+    def tick(self):
+        self.i = min(self.i + 1, len(self.steps) - 1)
+
+    def down(self, code):
+        return code in self.steps[self.i]
+
+
+class CaptureTest(unittest.TestCase):
+    def _capture(self, steps):
+        kb = FakeKeyboard(steps)
+        from unittest import mock
+        with mock.patch.object(keys.time, "sleep", lambda s: kb.tick()):
+            return keys.capture_combo(is_down_fn=kb.down, timeout=5)
+
+    def test_waits_for_release_then_takes_key(self):
+        self.assertEqual(self._capture([{0x0D}, set(), set(), {0x77}]), (0x77,))   # Enter noch gedrückt, dann F8
+
+    def test_mouse_button(self):
+        self.assertEqual(self._capture([set(), {0x05}]), (0x05,))
+
+    def test_modifier_combo(self):
+        self.assertEqual(self._capture([set(), {0x11}, {0x11, 0x77}]), (0x11, 0x77))
+
+    def test_lone_modifier(self):
+        self.assertEqual(self._capture([set(), {0x12}, {0x12}, set()]), (0x12,))
+
+    def test_escape_cancels(self):
+        self.assertIsNone(self._capture([set(), {0x1B}]))
+
+    def test_names_roundtrip(self):
+        for combo in [(0x11, 0x77), (0x05,), (0xBC,), (0xAD,), (0x12,), (0x60,)]:
+            self.assertEqual(keys.parse_hotkeys(keys.combo_name(combo)), [combo])
+
+
+class ChangeKeyTest(unittest.TestCase):
+    def setUp(self):
+        import os
+        import tempfile
+        from unittest import mock
+        self.tmp = tempfile.mkdtemp()
+        self.env = mock.patch.dict(os.environ, {"APPDATA": self.tmp})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_change_saves_and_applies(self):
+        from unittest import mock
+        from sprechhilfe import app as app_module
+        config.load()
+        a = app_module.App(config.load())
+        notes = []
+        a.on_notify = notes.append
+        with mock.patch.object(app_module.keys, "capture_combo", lambda: (0x06,)):
+            a._capture_key("sprechtaste")
+        self.assertEqual(a.talk_keys, [(0x06,)])
+        self.assertEqual(config.load().sprechtaste, "Maus5")
+        self.assertIn("Maus5", notes[-1])
+        self.assertIn("Sprechtaste: Maus5", a.key_label("sprechtaste"))
+        text = open(config.ini_path(), encoding="utf-8").read()
+        self.assertIn("; Die Sprech-Taste.", text)        # Erklärungen bleiben stehen
+
+    def test_conflict_is_refused(self):
+        from unittest import mock
+        from sprechhilfe import app as app_module
+        a = app_module.App(config.load())
+        a.on_notify = lambda m: None
+        with mock.patch.object(app_module.keys, "capture_combo", lambda: (0x78,)):   # F9 = Pausetaste
+            a._capture_key("sprechtaste")
+        self.assertEqual(config.load().sprechtaste, "F8, maus4")
+
+    def test_model_folder_uses_existing_files(self):
+        import os
+        from sprechhilfe.erkennung import model_folder
+        folder = os.path.join(self.tmp, "small")
+        os.makedirs(folder)
+        for name in ("model.bin", "config.json", "tokenizer.json"):
+            open(os.path.join(folder, name), "w").close()
+        self.assertEqual(model_folder("small", self.tmp, log=lambda m: None), folder)   # ohne Internet
+
+
+class TrayMenuTest(unittest.TestCase):
+    def test_menu_builds(self):
+        import os
+        os.environ["PYSTRAY_BACKEND"] = "dummy"
+        from sprechhilfe.tray import Tray
+        t = Tray(*(lambda: None,) * 6, is_paused=lambda: False,
+                 key_items=[(lambda: "Sprechtaste: F8", lambda: None)])
+        labels = [str(i.text) for i in t.icon.menu.items]
+        self.assertIn("Tasten festlegen", labels)
+        sub = [i for i in t.icon.menu.items if i.text == "Tasten festlegen"][0].submenu
+        self.assertEqual(sub.items[0].text, "Sprechtaste: F8")
