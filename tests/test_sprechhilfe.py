@@ -40,7 +40,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(s.modus, "immer")
         self.assertEqual(s.satzpause, 1.5)
         self.assertFalse(s.toene)
-        self.assertEqual(s.tippverzoegerung, 4)
+        self.assertEqual(s.tippverzoegerung, 8)
         self.assertEqual(s.eingabe, "einfuegen")
         self.assertEqual(s.ersetzungen, {"pay pal": "PayPal"})
 
@@ -105,7 +105,7 @@ class AppTest(unittest.TestCase):
         settings = config.parse(config.DEFAULT_INI + "pay pal = PayPal\n")
         states = []
         a = app_module.App(settings, on_state=lambda **kw: states.append(kw))
-        a.recognizer.transcribe = lambda samples: "Bitte zahlen Sie mit pay pal."
+        a.recognizer.transcribe = lambda samples, continuous=False: "Bitte zahlen Sie mit pay pal."
         typed = []
         with mock.patch.object(app_module.keys, "type_text", lambda t, d: typed.append(t)), \
                 mock.patch.object(app_module, "_history", lambda line: None):
@@ -127,3 +127,112 @@ class AppTest(unittest.TestCase):
         with mock.patch.object(app_module.keys, "type_text") as typer:
             a._deliver("Hallo")
         typer.assert_not_called()
+
+
+class FieldTest(unittest.TestCase):
+    def test_click_before_typing_and_send_after(self):
+        from unittest import mock
+        from sprechhilfe import app as app_module
+        a = app_module.App(config.parse(config.DEFAULT_INI))
+        a.field = [0.5, 0.9]
+        calls = []
+        with mock.patch.object(app_module.keys, "click_in_window", lambda x, y: calls.append(("klick", x, y))), \
+                mock.patch.object(app_module.keys, "type_text", lambda t, d: calls.append(("tippe", t))), \
+                mock.patch.object(app_module.keys, "press", lambda combo: calls.append(("taste", combo))), \
+                mock.patch.object(app_module, "_history", lambda line: None), \
+                mock.patch.object(app_module.time, "sleep", lambda s: None):
+            a._deliver("Hallo")
+        self.assertEqual(calls, [("klick", 0.5, 0.9), ("tippe", "Hallo"), ("taste", (0x0D,))])
+
+
+class MigrationTest(unittest.TestCase):
+    def test_old_file_keeps_user_values(self):
+        old = ("[Sprechhilfe]\nsprache = de\nmodell = medium\ntippverzoegerung = 4\nsprechtaste = maus5\n"
+               "[Ersetzungen]\npay pal = PayPal\n")
+        s = config.parse(config.migrate(old))
+        self.assertEqual(s.sprache, "auto")          # alter Standard -> neuer Standard
+        self.assertEqual(s.tippverzoegerung, 8)
+        self.assertEqual(s.modell, "medium")         # selbst geändert -> bleibt
+        self.assertEqual(s.sprechtaste, "maus5")
+        self.assertEqual(s.ersetzungen, {"pay pal": "PayPal"})
+        self.assertEqual(s.feld_merken_taste, "F10")
+
+
+class LanguageTest(unittest.TestCase):
+    def test_pick(self):
+        from sprechhilfe.erkennung import pick_language
+        self.assertEqual(pick_language([("en", 0.9), ("de", 0.05)]), "en")       # sicher Englisch
+        self.assertEqual(pick_language([("nl", 0.45), ("de", 0.4)]), "de")       # unsicher -> Hauptsprache
+        self.assertEqual(pick_language([("tr", 0.5), ("az", 0.3)]), "tr")        # Deutsch nicht im Rennen
+        self.assertEqual(pick_language([("nl", 0.9), ("de", 0.05), ("en", 0.04)], allowed=("de", "en")), "de")
+        self.assertEqual(pick_language([]), "de")
+
+
+class FakeSegment:
+    def __init__(self, text, no_speech=0.1, logprob=-0.3):
+        self.text, self.no_speech_prob, self.avg_logprob = text, no_speech, logprob
+
+
+class FakeInfo:
+    def __init__(self, language):
+        self.language = language
+
+
+class FakeModel:
+    """Tut so, als wäre es Whisper: erster Versuch leer, zweiter Versuch mit Text."""
+    def __init__(self, first, second, detected=(("de", 0.9),)):
+        self.calls = []
+        self.first, self.second, self.detected = first, second, list(detected)
+
+    def detect_language(self, samples):
+        return self.detected[0][0], self.detected[0][1], self.detected
+
+    def transcribe(self, samples, **kw):
+        self.calls.append(kw)
+        segs = self.first if len(self.calls) == 1 else self.second
+        return iter(segs), FakeInfo(kw.get("language") or "de")
+
+
+class RecognizerTest(unittest.TestCase):
+    def _speech(self):
+        t = np.arange(16000) / 16000
+        return (np.sin(2 * np.pi * 200 * t) * 6000).astype(np.int16)
+
+    def test_retry_when_first_pass_is_empty(self):
+        from sprechhilfe.erkennung import Recognizer
+        r = Recognizer(language="auto")
+        r.model = FakeModel([], [FakeSegment("Hallo, hier ist die Bank.")])
+        self.assertEqual(r.transcribe(self._speech()), "Hallo, hier ist die Bank.")
+        self.assertEqual(len(r.model.calls), 2)
+        self.assertFalse(r.model.calls[1]["vad_filter"])
+
+    def test_no_retry_on_silence(self):
+        from sprechhilfe.erkennung import Recognizer
+        r = Recognizer(language="de")
+        r.model = FakeModel([], [FakeSegment("Untertitel im Auftrag des ZDF")])
+        self.assertEqual(r.transcribe(np.zeros(16000, dtype=np.int16)), "")
+        self.assertEqual(len(r.model.calls), 1)
+
+    def test_other_language_is_kept(self):
+        from sprechhilfe.erkennung import Recognizer
+        r = Recognizer(language="auto")
+        r.model = FakeModel([FakeSegment("Hello, this is the bank.")], [], detected=(("en", 0.95), ("de", 0.02)))
+        self.assertEqual(r.transcribe(self._speech()), "Hello, this is the bank.")
+        self.assertEqual(r.model.calls[0]["language"], "en")
+        self.assertEqual(r.last_language, "en")
+
+    def test_push_to_talk_keeps_quiet_segments(self):
+        from sprechhilfe.erkennung import Recognizer
+        r = Recognizer(language="de")
+        r.model = FakeModel([FakeSegment("Ja.", no_speech=0.8, logprob=-0.9)], [])
+        self.assertEqual(r.transcribe(self._speech()), "Ja.")
+        self.assertFalse(r.model.calls[0]["vad_filter"])
+
+
+class GpuTest(unittest.TestCase):
+    def test_dll_members(self):
+        from sprechhilfe import gpu
+        names = ["nvidia/cublas/bin/cublas64_12.dll", "nvidia/cublas/include/x.h", "nvidia/cudnn/bin/cudnn_ops64_9.dll",
+                 "nvidia_cublas_cu12-12.9.1.4.dist-info/RECORD"]
+        self.assertEqual(gpu.dll_members(names), ["nvidia/cublas/bin/cublas64_12.dll",
+                                                  "nvidia/cudnn/bin/cudnn_ops64_9.dll"])

@@ -48,16 +48,33 @@ Das Spiel darf also **nicht selbst mithören**. Dann gibt es nur einen Weg ins S
 
 1. `Sprechhilfe.exe` doppelklicken. Unten rechts erscheint das Mikrofon-Symbol.
 2. Beim ersten Start einmal warten, bis das Modell heruntergeladen ist und das Symbol **grün** wird. Windows zeigt dann „Bereit!“.
-3. Im Spiel: **`F8` oder `Maus4` gedrückt halten → Deutsch sprechen → loslassen.**
-4. Kurzer Ton, dann tippt die Sprechhilfe den Satz ins Spiel und drückt **Enter** zum Abschicken.
-5. **`F9`** = Pause an/aus.
+3. **Einmalig: Textfeld merken.** Zeig im Spiel mit der Maus auf das Textfeld, in das man tippt, und drück **`F10`** (Doppel-Piep). Ab jetzt klickt die Sprechhilfe vor jedem Satz selbst in dieses Feld. So kommt **jeder** Satz an, auch wenn das Spiel das Feld nach dem Abschicken zumacht. Das war meistens der Grund, wenn Sätze gefehlt haben.
+4. Im Spiel: **`F8` oder `Maus4` gedrückt halten → sprechen → loslassen.**
+5. Kurzer Ton, dann tippt die Sprechhilfe den Satz ins Spiel und drückt **Enter** zum Abschicken.
+6. **`F9`** = Pause an/aus.
+
+Ein **tiefer Ton** heißt: nichts verstanden, bitte nochmal sagen. Ist ein Satz trotzdem nicht im Spiel angekommen: Rechtsklick aufs Symbol → **„Letzten Satz nochmal tippen“**.
+
+### Andere Sprachen
+
+Standard ist `sprache = auto`. Die Sprechhilfe erkennt selbst, welche Sprache du sprichst (Deutsch, Englisch, Türkisch, Russisch, Polnisch, Arabisch, … rund 100 Sprachen), und tippt den Satz **genau so, wie du ihn gesagt hast**. Es wird **nicht übersetzt**. Ist sie sich unsicher, nimmt sie Deutsch (`hauptsprache`).
+
+Wird Deutsch manchmal als eine andere Sprache erkannt, schränk die Auswahl ein, z. B. `erlaubte_sprachen = de, en, tr`. Sprichst du nur eine Sprache, ist `sprache = de` am zuverlässigsten.
+
+### Genauer mit der Grafikkarte
+
+Hast du eine **NVIDIA-Grafikkarte** (z. B. GTX 1660 Super), fragt die Sprechhilfe beim ersten Start, ob sie die Karte nutzen soll. Bei **„Ja“** lädt sie einmalig ca. 1,2 GB von NVIDIA (braucht ca. 2 GB Platz) und nimmt dann das genaueste Modell (`large-v3-turbo`). Das ist deutlich genauer und trotzdem schnell. Nachholen geht per Rechtsklick → **„Grafikkarte einrichten“**.
+
+Ohne Grafikkarte nimmt sie auf starken Prozessoren `medium`, sonst `small`.
 
 Was verstanden und getippt wurde, steht im Protokoll (Rechtsklick aufs Symbol) und in `%APPDATA%\Sprechhilfe\verlauf.txt`.
 
 ### Wenn im Spiel nichts ankommt
 
-- **Das Textfeld muss offen sein.** Klick einmal hinein. Oder trag in den Einstellungen bei `chattaste` die Taste ein, mit der das Spiel das Textfeld öffnet (z. B. `enter` oder `t`). Dann drückt die Sprechhilfe sie vorher selbst.
+- **Textfeld merken** (siehe oben, `F10`). Wenn das Spiel stattdessen eine Taste zum Öffnen des Textfelds hat, trag sie bei `chattaste` ein (z. B. `enter` oder `t`).
 - **Buchstaben fehlen:** `tippverzoegerung` erhöhen (z. B. `15`), oder `eingabe = einfuegen` probieren.
+- **Satz wird getippt, aber nicht abgeschickt:** `absende_wartezeit` erhöhen (z. B. `400`).
+- Im **Protokoll** (Rechtsklick → „Was wurde verstanden?“) steht zu jedem Satz, was erkannt wurde, in welcher Sprache und wie lange es gedauert hat.
 - **Läuft das Spiel als Administrator**, muss die Sprechhilfe das auch: Rechtsklick → „Als Administrator ausführen“.
 - **Abschicken stimmt nicht:** `absendetaste` anpassen oder leer lassen, dann drückst du Enter selbst.
 
@@ -71,14 +88,20 @@ Rechtsklick aufs Symbol → **„Einstellungen öffnen“** öffnet `%APPDATA%\S
 | `sprechtaste` | `F8, maus4` | Mehrere mit Komma, Kombis mit `+` (z. B. `strg+leertaste`, `maus5`, `mausmitte`) |
 | `pausetaste` | `F9` | Pause an/aus |
 | `mikrofon` | leer | Teil des Gerätenamens. Liste: Rechtsklick → „Mikrofone anzeigen“ |
+| `feld_merken_taste` | `F10` | Maus aufs Textfeld im Spiel, Taste drücken: Ab jetzt wird vor jedem Satz dort hineingeklickt |
 | `chattaste` | leer | Taste vor dem Tippen (öffnet das Textfeld) |
 | `absendetaste` | `enter` | Taste nach dem Tippen |
+| `sprache` | `auto` | `auto` (erkennt die Sprache selbst) oder fest `de`, `en`, `tr`, … |
+| `hauptsprache` | `de` | Wird genommen, wenn die Erkennung unsicher ist |
+| `erlaubte_sprachen` | leer | Nur diese Sprachen zulassen, z. B. `de, en` |
 | `modell` | `auto` | `small` (schnell), `medium` (versteht besser), `large-v3-turbo` (am genauesten) |
 | `wichtige_woerter` | leer | Namen und Wörter, die besser erkannt werden sollen |
 | `nur_in_fenster` | leer | Nur tippen, wenn ein Fenster mit diesem Titel vorne ist (z. B. `Scam`) |
 | `[Ersetzungen]` | – | `falsch = richtig` für Wörter, die immer wieder falsch kommen |
 
-**Wie gut wird verstanden?** `auto` nimmt mit einer NVIDIA-Grafikkarte (wenn CUDA installiert ist) `medium`, sonst `small` auf dem Prozessor. Versteht er dich nicht gut genug, stell `modell = medium` ein. Das ist auf dem Prozessor etwas langsamer (ein paar Sekunden pro Satz), aber deutlich genauer.
+**Wie gut wird verstanden?** Mit eingerichteter Grafikkarte nimmt `auto` das genaueste Modell. Auf dem Prozessor kannst du `modell = medium` oder `large-v3-turbo` einstellen. Das ist genauer, braucht aber ein paar Sekunden pro Satz.
+
+Ehrlich gesagt: **100 % fehlerfrei ist keine Spracherkennung**, auch nicht die von Google oder Apple. Undeutliche Wörter, Namen oder laute Umgebung führen manchmal zu Fehlern. Dafür gibt es `wichtige_woerter` und `[Ersetzungen]`. Bei Updates bleiben deine eigenen Einstellungen erhalten.
 
 ## Selbst starten (ohne EXE)
 

@@ -190,6 +190,53 @@ if IS_WINDOWS:
     def set_console_title(title):
         _kernel32.SetConsoleTitleW(title)
 
+    _user32.GetClientRect.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+    _user32.ClientToScreen.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.POINT))
+    _user32.ScreenToClient.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.POINT))
+    _user32.GetCursorPos.argtypes = (ctypes.POINTER(wintypes.POINT),)
+    _user32.SetCursorPos.argtypes = (ctypes.c_int, ctypes.c_int)
+    _INPUT_MOUSE = 0
+    _MOUSEEVENTF_LEFTDOWN, _MOUSEEVENTF_LEFTUP = 0x0002, 0x0004
+
+    def _client_rect(hwnd):
+        rect = wintypes.RECT()
+        _user32.GetClientRect(hwnd, ctypes.byref(rect))
+        origin = wintypes.POINT(0, 0)
+        _user32.ClientToScreen(hwnd, ctypes.byref(origin))
+        return origin.x, origin.y, rect.right - rect.left, rect.bottom - rect.top
+
+    def mouse_in_window():
+        """Mausposition relativ zum Fenster vorne, als Anteil (0…1, 0…1), damit es auch bei anderer Auflösung passt."""
+        hwnd = _user32.GetForegroundWindow()
+        point = wintypes.POINT()
+        _user32.GetCursorPos(ctypes.byref(point))
+        x, y, width, height = _client_rect(hwnd)
+        if width <= 0 or height <= 0:
+            return None
+        return (point.x - x) / width, (point.y - y) / height
+
+    def click_in_window(fx, fy):
+        """Klickt an die gemerkte Stelle im Fenster vorne und stellt die Maus danach zurück."""
+        hwnd = _user32.GetForegroundWindow()
+        x, y, width, height = _client_rect(hwnd)
+        if width <= 0 or height <= 0:
+            return False
+        old = wintypes.POINT()
+        _user32.GetCursorPos(ctypes.byref(old))
+        _user32.SetCursorPos(int(x + fx * width), int(y + fy * height))
+        time.sleep(0.03)
+        events = []
+        for flag in (_MOUSEEVENTF_LEFTDOWN, _MOUSEEVENTF_LEFTUP):
+            event = INPUT(type=_INPUT_MOUSE)
+            event.mi = MOUSEINPUT(dx=0, dy=0, mouseData=0, dwFlags=flag, time=0, dwExtraInfo=0)
+            events.append(event)
+        _send(events[:1])
+        time.sleep(0.03)
+        _send(events[1:])
+        time.sleep(0.03)
+        _user32.SetCursorPos(old.x, old.y)
+        return True
+
 else:  # Zum Entwickeln und Testen unter Linux/macOS: nichts drücken, nur so tun.
     def is_down(vk):
         return False
@@ -208,6 +255,12 @@ else:  # Zum Entwickeln und Testen unter Linux/macOS: nichts drücken, nur so tu
 
     def set_console_title(title):
         pass
+
+    def mouse_in_window():
+        return None
+
+    def click_in_window(fx, fy):
+        return False
 
 
 def any_down(hotkeys):

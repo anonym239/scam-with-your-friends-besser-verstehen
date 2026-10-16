@@ -28,8 +28,13 @@ pausetaste = F9
 ; Mikrofon: leer = Windows-Standard. Sonst ein Teil des Namens, z. B.  mikrofon = HyperX
 mikrofon =
 
+; Textfeld merken: Zeig im Spiel mit der Maus auf das Textfeld und drück diese Taste (einmal reicht).
+; Danach klickt die Sprechhilfe vor jedem Satz selbst ins Textfeld, damit wirklich jeder Satz ankommt,
+; auch wenn das Spiel nach dem Abschicken das Textfeld schließt. Nochmal drücken = neue Stelle merken.
+feld_merken_taste = F10
+
 ; Taste(n), die VOR dem Tippen gedrückt werden, um im Spiel das Textfeld zu öffnen.
-; Leer lassen, wenn das Textfeld schon offen ist (einmal hineinklicken). Beispiele: enter, t, y, strg+t
+; Meist nicht nötig, wenn du das Textfeld gemerkt hast. Beispiele: enter, t, y, strg+t
 chattaste =
 
 ; Taste nach dem Tippen zum Abschicken. Leer = nicht abschicken (dann selbst Enter drücken).
@@ -41,17 +46,21 @@ absendetaste = enter
 eingabe = tippen
 
 ; Pause zwischen zwei Buchstaben in Millisekunden (höher, falls Buchstaben fehlen).
-tippverzoegerung = 4
+tippverzoegerung = 8
 
-; Wartezeit in Millisekunden nach der Chattaste, bis das Textfeld offen ist.
+; Wartezeit in Millisekunden nach dem Klick/der Chattaste, bis das Textfeld bereit ist.
 wartezeit = 150
+
+; Wartezeit in Millisekunden zwischen dem letzten Buchstaben und dem Abschicken.
+absende_wartezeit = 150
 
 ; Nur tippen, wenn das Spiel im Vordergrund ist. Leer = immer ins aktuelle Fenster tippen.
 ; Ein Teil des Fenstertitels, z. B.  nur_in_fenster = Scam
 nur_in_fenster =
 
 ; Spracherkennungs-Modell (läuft komplett auf deinem PC, ohne Internet, ohne Konto):
-;   auto           = Grafikkarte (NVIDIA): medium, sonst small
+;   auto           = mit eingerichteter NVIDIA-Grafikkarte: large-v3-turbo (am genauesten),
+;                    sonst auf dem Prozessor: medium bei starken PCs, small bei schwächeren
 ;   small          = ~460 MB, schnell, gut
 ;   medium         = ~1,5 GB, versteht deutlich besser, auf dem Prozessor etwas langsamer
 ;   large-v3-turbo = ~1,6 GB, am genauesten, am besten mit Grafikkarte
@@ -60,8 +69,18 @@ modell = auto
 ; Rechner: auto, cpu oder cuda (NVIDIA-Grafikkarte)
 geraet = auto
 
-; Sprache, die du sprichst (de = Deutsch).
-sprache = de
+; Sprache, die du sprichst:
+;   auto = erkennt selbst, welche Sprache du sprichst (Deutsch, Englisch, Türkisch, Russisch, …)
+;          und tippt es genau so, wie du es gesagt hast (es wird NICHT übersetzt)
+;   de / en / tr / ru / pl / ar / … = immer diese eine Sprache (am zuverlässigsten, wenn du nur die sprichst)
+sprache = auto
+
+; Bei sprache = auto: Wenn sich die Erkennung nicht sicher ist, wird diese Sprache genommen.
+hauptsprache = de
+
+; Bei sprache = auto: nur diese Sprachen zulassen (mit Komma). Leer = alle ~100 Sprachen.
+; Hilft, wenn Deutsch manchmal als Niederländisch o. Ä. erkannt wird. Beispiel:  erlaubte_sprachen = de, en, tr
+erlaubte_sprachen =
 
 ; Wörter, die oft falsch verstanden werden (Namen usw.), mit Komma getrennt.
 ; Beispiel:  wichtige_woerter = Sparkasse, PayPal, IBAN, Amazon
@@ -104,15 +123,19 @@ class Settings:
     sprechtaste: str = "F8, maus4"
     pausetaste: str = "F9"
     mikrofon: str = ""
+    feld_merken_taste: str = "F10"
     chattaste: str = ""
     absendetaste: str = "enter"
     eingabe: str = "tippen"
-    tippverzoegerung: int = 4
+    tippverzoegerung: int = 8
     wartezeit: int = 150
+    absende_wartezeit: int = 150
     nur_in_fenster: str = ""
     modell: str = "auto"
     geraet: str = "auto"
-    sprache: str = "de"
+    sprache: str = "auto"
+    hauptsprache: str = "de"
+    erlaubte_sprachen: str = ""
     wichtige_woerter: str = ""
     toene: bool = True
     punkt_weglassen: bool = False
@@ -157,11 +180,63 @@ def parse(text):
     return settings
 
 
+# Standardwerte der ersten Version. Was der Nutzer davon nie geändert hat, bekommt beim Aktualisieren die neuen Werte.
+_OLD_DEFAULTS = {"sprache": "de", "tippverzoegerung": "4"}
+
+
+def migrate(old_text):
+    """Bringt eine alte Einstellungsdatei auf den neuen Stand und behält dabei alles, was der Nutzer geändert hat."""
+    import re
+    old = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+    old.optionxform = str
+    old.read_string(old_text)
+    new_text = DEFAULT_INI
+    if old.has_section("Sprechhilfe"):
+        for key, value in old["Sprechhilfe"].items():
+            value = value.strip()
+            if _OLD_DEFAULTS.get(key) == value:
+                continue
+            new_text, count = re.subn(rf"(?m)^{re.escape(key)} =.*$", lambda _m: f"{key} = {value}", new_text, count=1)
+    if old.has_section("Ersetzungen"):
+        lines = [f"{k} = {v.strip()}" for k, v in old["Ersetzungen"].items()]
+        if lines:
+            new_text = new_text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+    return new_text
+
+
 def load():
-    """Liest die Einstellungen; legt die Datei beim ersten Start an."""
+    """Liest die Einstellungen; legt die Datei beim ersten Start an und bringt alte Dateien auf den neuen Stand."""
     path = ini_path()
     if not os.path.exists(path):
         with open(path, "w", encoding="utf-8") as f:
             f.write(DEFAULT_INI)
     with open(path, encoding="utf-8-sig") as f:
-        return parse(f.read())
+        text = f.read()
+    if "hauptsprache" not in text:
+        text = migrate(text)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+    return parse(text)
+
+
+def state_path():
+    return os.path.join(data_dir(), "zustand.json")
+
+
+def load_state():
+    """Kleine Merkliste (Textfeld-Position, ob nach der Grafikkarte schon gefragt wurde)."""
+    import json
+    try:
+        with open(state_path(), encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(**changes):
+    import json
+    data = load_state()
+    data.update(changes)
+    with open(state_path(), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)

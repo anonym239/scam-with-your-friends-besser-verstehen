@@ -9,11 +9,30 @@ permissions:
   contents: write
 
 jobs:
+  testaudio:
+    name: Testaufnahmen (Deutsch und Englisch)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sätze mit einer Computerstimme sprechen lassen
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng > /dev/null
+          espeak-ng -v de -s 140 -w de.wav "Guten Tag, hier spricht Ihre Bank. Bitte bestätigen Sie mir kurz Ihre Kontonummer, damit ich Ihnen helfen kann."
+          espeak-ng -v en-us -s 140 -w en.wav "Hello, this is your bank calling. Please confirm your account number so that I can help you."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: testaudio
+          path: "*.wav"
+
   windows:
     name: Windows-EXE
+    needs: [testaudio]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: testaudio
+          path: testaudio
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -25,14 +44,16 @@ jobs:
         run: python -m unittest discover -s tests -t . -v
       - name: Sprechhilfe.exe bauen
         run: python -m PyInstaller --noconfirm sprechhilfe.spec
-      - name: Selbsttest beider EXE (lädt das kleinste Modell und erkennt Stille)
+      - name: Selbsttest beider EXE (erkennt Stille und echte deutsche und englische Sätze)
         shell: pwsh
         run: |
+          $env:SPRECHHILFE_TESTMODELL = "base"
+          $env:SPRECHHILFE_TESTWAV = "de=$PWD\testaudio\de.wav;en=$PWD\testaudio\en.wav"
           foreach ($exe in @("dist\Sprechhilfe\Sprechhilfe.exe", "dist\Sprechhilfe-EinKlick.exe")) {
             Remove-Item "$env:APPDATA\Sprechhilfe\selbsttest.txt" -ErrorAction SilentlyContinue
             $test = Start-Process $exe -ArgumentList "--selbsttest" -Wait -PassThru
             Write-Host "$exe :"
-            Get-Content "$env:APPDATA\Sprechhilfe\selbsttest.txt"
+            Get-Content "$env:APPDATA\Sprechhilfe\selbsttest.txt" -Encoding utf8
             if ($test.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen: $exe" }
           }
       - name: Installer bauen (Sprechhilfe-Setup.exe)
@@ -74,7 +95,11 @@ jobs:
           body: |
             **Mit einem Klick:** `Sprechhilfe.exe` herunterladen und doppelklicken. Fertig. Sie läuft unsichtbar im Hintergrund, nur ein Mikrofon-Symbol unten rechts in der Taskleiste (eventuell hinter dem Pfeil ^).
 
-            Im Spiel: **F8** oder die vordere Seitentaste der Maus gedrückt halten, Deutsch sprechen, loslassen. Der Text wird ins Spiel getippt und abgeschickt.
+            **Einmalig:** Im Spiel mit der Maus auf das Textfeld zeigen und **F10** drücken. Dann klickt die Sprechhilfe vor jedem Satz selbst hinein, damit jeder Satz ankommt.
+
+            Im Spiel: **F8** oder die vordere Seitentaste der Maus gedrückt halten, sprechen (Deutsch oder eine andere Sprache), loslassen. Der Text wird genau so ins Spiel getippt und abgeschickt.
+
+            Mit NVIDIA-Grafikkarte fragt sie beim ersten Start, ob sie die Karte nutzen soll. Mit „Ja“ wird die Erkennung genauer und schneller.
 
             Beim allerersten Start wird die Spracherkennung einmalig heruntergeladen (ca. 460 MB). Danach läuft alles offline auf deinem PC.
             Wichtig: Im Spiel die eigene Sprachaufnahme ausschalten bzw. auf Tippen stellen, sonst kommt alles doppelt an.
